@@ -1,0 +1,18 @@
+{
+  "name": "ZPRINT",
+  "product": "ZPRINT - AI Printing Portal",
+  "version": "0.1.0",
+  "description": "AI-powered conversational portal for printing services.",
+  "generator": {
+    "name": "ZPRINT",
+    "version": "0.1.0",
+    "milestone": "4.1"
+  },
+  "paths": {
+    "portal": "portal",
+    "backend": "backend",
+    "database": "database",
+    "brand": "brand",
+    "build": "build"
+  }
+}
