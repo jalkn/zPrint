@@ -30,31 +30,44 @@
 #
 # ============================================================================== 
 
+#requires -Version 7.0
+
 <#
 .SYNOPSIS
-    ZPRINT STUDIO single-file platform generator.
+    ZPRINT STUDIO single-file platform orchestrator.
 
 .DESCRIPTION
-    Generates, updates, validates, and maintains the ZPRINT platform.
+    ZPRINT STUDIO is a DIGITAL DESIGN & PRODUCTION PLATFORM.
+
+    This script is the central control point for generating,
+    updating, validating, and maintaining the entire ZPRINT platform.
 
     ARCHITECTURE PRINCIPLES
-    - One permanent PowerShell orchestrator.
-    - Modular internal architecture.
-    - Progressive and idempotent implementation.
-    - Explicit file protection and overwrite policies.
-    - Centralized validation, diagnostics, and error handling.
-    - Git operations remain external to this script.
+    - Single permanent PowerShell orchestrator.
+    - All project logic remains inside this file.
+    - Internally modular architecture with defined responsibilities.
+    - Generated files and assets may be organized into separate directories.
+    - Existing user data and configuration must be preserved.
+    - Operations must be idempotent.
+    - Every operation must support validation and logging.
 
-    RUNTIME FOUNDATION
-    - Centralized exit codes and output.
-    - PowerShell and operating-system detection.
-    - Project-root resolution independent of the caller's directory.
-    - Append-only diagnostic logging when required.
+    PLATFORM RESPONSIBILITIES
+    - Project Core and Configuration.
+    - Platform and File Generation.
+    - Brand Management.
+    - Product Catalog Management.
+    - Application Generation.
+    - AI Agent Integration.
+    - Documentation Generation.
+    - Validation and Diagnostics.
+    - Logging and Command Routing.
 
-    PROJECT STRUCTURE REGISTRY
-    - Centralized canonical project paths.
-    - Explicit required, optional, and planned directories.
-    - Future directories remain deferred until their implementation milestone.
+    DEVELOPMENT PRINCIPLES
+    - Extend this permanent file; never create versioned orchestrators.
+    - Implement capabilities progressively.
+    - Validate each implementation before advancing.
+    - Avoid unnecessary external dependencies.
+    - Never overwrite existing user data silently.
 
 .PARAMETER Help
     Display the command help information.
@@ -63,12 +76,12 @@
     Display the generator version and milestone.
 
 .NOTES
-    Project:       ZPRINT
-    Platform:      ZPRINT STUDIO
+    Project:       ZPRINT STUDIO
     Positioning:   DIGITAL DESIGN & PRODUCTION PLATFORM
-    Orchestrator:  zprint.ps1
     Version:       0.1.0
-    Milestone:     Project Architecture & State Management
+    Milestone:     Project Architecture
+    Orchestrator:  zprint.ps1
+    Architecture: Single-File Platform Generator
 #>
 
 # ==============================================================================
@@ -340,7 +353,230 @@ function Initialize-ZprintRuntimePaths {
 }
 
 # ==============================================================================
-# 07. LOGGING FOUNDATION
+# 07. CONFIGURATION MANAGEMENT
+# ==============================================================================
+
+function Get-ZprintDefaultProjectConfiguration {
+    # This is an in-memory reference only. It does not create or modify files.
+    [ordered]@{
+        project = [ordered]@{
+            name        = 'ZPRINT'
+            product     = 'ZPRINT STUDIO'
+            description = 'Digital Design & Production Platform'
+            version     = '0.1.0'
+            milestone   = 'Project Architecture'
+            orchestrator = 'zprint.ps1'
+        }
+    }
+}
+
+function ConvertFrom-ZprintProjectJson {
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$JsonContent
+    )
+
+    # Parsing is isolated so callers can handle JSON errors consistently.
+    ConvertFrom-Json `
+        -InputObject $JsonContent `
+        -AsHashtable `
+        -ErrorAction Stop
+}
+
+function Read-ZprintProjectConfiguration {
+    if ($null -eq $script:ZprintPaths) {
+        Initialize-ZprintRuntimePaths
+    }
+
+    $configurationPath = $script:ZprintPaths.ProjectConfiguration
+
+    if (-not (Test-Path -LiteralPath $configurationPath)) {
+        return [pscustomobject]@{
+            Status        = 'Missing'
+            Path          = $configurationPath
+            Configuration = $null
+            ErrorMessage  = $null
+        }
+    }
+
+    try {
+        $configurationItem = Get-Item -LiteralPath $configurationPath -ErrorAction Stop
+
+        if ($configurationItem.PSIsContainer) {
+            return [pscustomobject]@{
+                Status        = 'Invalid'
+                Path          = $configurationPath
+                Configuration = $null
+                ErrorMessage  = 'The project configuration path exists but is not a file.'
+            }
+        }
+
+        $jsonContent = Get-Content -LiteralPath $configurationPath -Raw -ErrorAction Stop
+
+        if ([string]::IsNullOrWhiteSpace($jsonContent)) {
+            return [pscustomobject]@{
+                Status        = 'Invalid'
+                Path          = $configurationPath
+                Configuration = $null
+                ErrorMessage  = 'The project configuration file is empty.'
+            }
+        }
+
+        $configuration = ConvertFrom-ZprintProjectJson -JsonContent $jsonContent
+
+        if ($null -eq $configuration -or
+            $configuration -isnot [System.Collections.IDictionary]) {
+            return [pscustomobject]@{
+                Status        = 'Invalid'
+                Path          = $configurationPath
+                Configuration = $null
+                ErrorMessage  = 'The project configuration root must be a JSON object.'
+            }
+        }
+
+        return [pscustomobject]@{
+            Status        = 'Loaded'
+            Path          = $configurationPath
+            Configuration = $configuration
+            ErrorMessage  = $null
+        }
+    }
+    catch {
+        return [pscustomobject]@{
+            Status        = 'Invalid'
+            Path          = $configurationPath
+            Configuration = $null
+            ErrorMessage  = $_.Exception.Message
+        }
+    }
+}
+
+function Test-ZprintProjectConfiguration {
+    param(
+        [Parameter(Mandatory)]
+        [AllowNull()]
+        [object]$Configuration
+    )
+
+    $errors = [System.Collections.Generic.List[string]]::new()
+    $missingFields = [System.Collections.Generic.List[string]]::new()
+    $invalidFields = [System.Collections.Generic.List[string]]::new()
+
+    if ($null -eq $Configuration -or
+        $Configuration -isnot [System.Collections.IDictionary]) {
+        $errors.Add('The configuration root must be a JSON object.')
+
+        return [pscustomobject]@{
+            IsValid       = $false
+            IsComplete    = $false
+            Errors        = @($errors)
+            MissingFields = @($missingFields)
+            InvalidFields = @('root')
+        }
+    }
+
+    if (-not $Configuration.Contains('project')) {
+        $missingFields.Add('project')
+    }
+    elseif ($Configuration['project'] -isnot [System.Collections.IDictionary]) {
+        $invalidFields.Add('project')
+        $errors.Add("The 'project' value must be a JSON object.")
+    }
+    else {
+        $requiredFields = @(
+            'name',
+            'product',
+            'description',
+            'version',
+            'milestone',
+            'orchestrator'
+        )
+
+        foreach ($fieldName in $requiredFields) {
+            if (-not $Configuration['project'].Contains($fieldName)) {
+                $missingFields.Add("project.$fieldName")
+                continue
+            }
+
+            $fieldValue = $Configuration['project'][$fieldName]
+
+            if ($fieldValue -isnot [string]) {
+                $invalidFields.Add("project.$fieldName")
+                $errors.Add("The 'project.$fieldName' value must be a string.")
+            }
+            elseif ([string]::IsNullOrWhiteSpace($fieldValue)) {
+                $missingFields.Add("project.$fieldName")
+            }
+        }
+    }
+
+    foreach ($field in $missingFields) {
+        $errors.Add("Required configuration field is missing or empty: $field")
+    }
+
+    [pscustomobject]@{
+        IsValid       = ($invalidFields.Count -eq 0)
+        IsComplete    = ($missingFields.Count -eq 0)
+        Errors        = @($errors)
+        MissingFields = @($missingFields)
+        InvalidFields = @($invalidFields)
+    }
+}
+
+function Get-ZprintConfigurationState {
+    $readResult = Read-ZprintProjectConfiguration
+
+    if ($readResult.Status -eq 'Missing') {
+        return [pscustomobject]@{
+            State          = 'Missing'
+            Path           = $readResult.Path
+            Exists         = $false
+            Configuration  = $null
+            Errors         = @()
+            MissingFields  = @()
+            InvalidFields  = @()
+        }
+    }
+
+    if ($readResult.Status -ne 'Loaded') {
+        return [pscustomobject]@{
+            State          = 'Invalid'
+            Path           = $readResult.Path
+            Exists         = $true
+            Configuration  = $null
+            Errors         = @($readResult.ErrorMessage)
+            MissingFields  = @()
+            InvalidFields  = @('file')
+        }
+    }
+
+    $validation = Test-ZprintProjectConfiguration `
+        -Configuration $readResult.Configuration
+
+    $state = if (-not $validation.IsValid) {
+        'Invalid'
+    }
+    elseif (-not $validation.IsComplete) {
+        'Incomplete'
+    }
+    else {
+        'Valid'
+    }
+
+    [pscustomobject]@{
+        State          = $state
+        Path           = $readResult.Path
+        Exists         = $true
+        Configuration  = $readResult.Configuration
+        Errors         = $validation.Errors
+        MissingFields  = $validation.MissingFields
+        InvalidFields  = $validation.InvalidFields
+    }
+}
+
+# ==============================================================================
+# 08. LOGGING FOUNDATION
 # ==============================================================================
 
 function Write-ZprintLog {
@@ -375,7 +611,7 @@ function Write-ZprintLog {
 }
 
 # ==============================================================================
-# 08. COMMAND HANDLERS
+# 09. COMMAND HANDLERS
 # ==============================================================================
 
 function Show-ZprintHelp {
@@ -414,7 +650,7 @@ function Show-ZprintVersion {
 }
 
 # ==============================================================================
-# 09. COMMAND VALIDATION
+# 10. COMMAND VALIDATION
 # ==============================================================================
 
 function Get-ZprintCommandState {
@@ -475,7 +711,7 @@ function Get-ZprintCommandState {
 }
 
 # ==============================================================================
-# 10. MAIN EXECUTION AND ERROR HANDLING
+# 11. MAIN EXECUTION AND ERROR HANDLING
 # ==============================================================================
 
 try {
