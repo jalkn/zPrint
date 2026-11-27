@@ -26,7 +26,7 @@
 #   PowerShell 7+
 #
 #   Version:   0.1.0
-#   Milestone: 02 — Runtime Foundation
+#   Milestone: 03 — Project Architecture & State Management
 #
 # ============================================================================== 
 
@@ -51,6 +51,11 @@
     - Project-root resolution independent of the caller's directory.
     - Append-only diagnostic logging when required.
 
+    PROJECT STRUCTURE REGISTRY
+    - Centralized canonical project paths.
+    - Explicit required, optional, and planned directories.
+    - Future directories remain deferred until their implementation milestone.
+
 .PARAMETER Help
     Display the command help information.
 
@@ -63,7 +68,7 @@
     Positioning:   DIGITAL DESIGN & PRODUCTION PLATFORM
     Orchestrator:  zprint.ps1
     Version:       0.1.0
-    Milestone:     Runtime Foundation
+    Milestone:     Project Architecture & State Management
 #>
 
 # ==============================================================================
@@ -83,7 +88,7 @@ param(
 # ==============================================================================
 
 $script:ZprintVersion = '0.1.0'
-$script:ZprintMilestone = '02 — Runtime Foundation'
+$script:ZprintMilestone = '03 — Project Architecture & State Management'
 
 $script:ZprintExitCodes = @{
     Success          = 0
@@ -93,6 +98,7 @@ $script:ZprintExitCodes = @{
 }
 
 $script:ZprintProjectRoot = $null
+$script:ZprintPaths = $null
 $script:ZprintLogPath = $null
 
 # ==============================================================================
@@ -151,8 +157,173 @@ function Get-ZprintRuntimeEnvironment {
 }
 
 # ==============================================================================
-# 06. PROJECT ROOT AND PATH MANAGEMENT
+# 06. PROJECT STRUCTURE REGISTRY
 # ==============================================================================
+
+function Get-ZprintProjectPaths {
+    param(
+        [Parameter(Mandatory)]
+        [string]$ProjectRoot
+    )
+
+    $root = [System.IO.Path]::GetFullPath($ProjectRoot)
+
+    [pscustomobject][ordered]@{
+        ProjectRoot             = $root
+        Orchestrator            = Join-Path $root 'zprint.ps1'
+
+        ConfigDirectory         = Join-Path $root 'config'
+        ProjectConfiguration    = Join-Path $root 'config/project.json'
+        CatalogConfiguration    = Join-Path $root 'config/catalog.json'
+
+        BrandDirectory          = Join-Path $root 'brand'
+        BrandAssetsDirectory    = Join-Path $root 'brand/assets'
+        BrandLogo               = Join-Path $root 'brand/assets/zPrint.svg'
+        BrandBookCover          = Join-Path $root 'brand/assets/brandBookCover.png'
+        BrandLogoGeometry       = Join-Path $root 'brand/assets/logoGeometry.png'
+        BrandDocumentation      = Join-Path $root 'brand/documentation'
+
+        PlatformDirectory       = Join-Path $root 'platform'
+        FrontendDirectory       = Join-Path $root 'platform/frontend'
+        BackendDirectory        = Join-Path $root 'platform/backend'
+        SharedDirectory         = Join-Path $root 'platform/shared'
+
+        DataDirectory           = Join-Path $root 'data'
+        DataSchemasDirectory    = Join-Path $root 'data/schemas'
+        DataSeedsDirectory      = Join-Path $root 'data/seeds'
+
+        DocumentationDirectory  = Join-Path $root 'documentation'
+        BuildDirectory          = Join-Path $root 'build'
+
+        LogsDirectory           = Join-Path $root 'logs'
+        LogFile                 = Join-Path $root 'logs/zprint.log'
+    }
+}
+
+function Get-ZprintProjectStructure {
+    param(
+        [Parameter(Mandatory)]
+        [string]$ProjectRoot
+    )
+
+    $paths = Get-ZprintProjectPaths -ProjectRoot $ProjectRoot
+
+    # Required directories form the minimum project foundation.
+    # Optional directories are created only when their owning capability needs them.
+    # Planned directories are documented targets and are not created in this block.
+    $structureDefinitions = @(
+        [pscustomobject]@{
+            Id = 'Configuration'
+            RelativePath = 'config'
+            Requirement = 'Required'
+            Lifecycle = 'Foundation'
+            CreationPolicy = 'CreateIfMissing'
+            Purpose = 'Project and platform configuration'
+        }
+        [pscustomobject]@{
+            Id = 'Brand'
+            RelativePath = 'brand'
+            Requirement = 'Required'
+            Lifecycle = 'Foundation'
+            CreationPolicy = 'CreateIfMissing'
+            Purpose = 'Brand identity resources'
+        }
+        [pscustomobject]@{
+            Id = 'BrandAssets'
+            RelativePath = 'brand/assets'
+            Requirement = 'Required'
+            Lifecycle = 'Foundation'
+            CreationPolicy = 'CreateIfMissing'
+            Purpose = 'Installed authoritative brand assets'
+        }
+        [pscustomobject]@{
+            Id = 'Logs'
+            RelativePath = 'logs'
+            Requirement = 'Optional'
+            Lifecycle = 'Runtime'
+            CreationPolicy = 'CreateOnDemand'
+            Purpose = 'Append-only generator diagnostics'
+        }
+        [pscustomobject]@{
+            Id = 'BrandDocumentation'
+            RelativePath = 'brand/documentation'
+            Requirement = 'Planned'
+            Lifecycle = 'Future'
+            CreationPolicy = 'Deferred'
+            Purpose = 'Brand guidelines and identity documentation'
+        }
+        [pscustomobject]@{
+            Id = 'Frontend'
+            RelativePath = 'platform/frontend'
+            Requirement = 'Planned'
+            Lifecycle = 'Future'
+            CreationPolicy = 'Deferred'
+            Purpose = 'Customer-facing portal application'
+        }
+        [pscustomobject]@{
+            Id = 'Backend'
+            RelativePath = 'platform/backend'
+            Requirement = 'Planned'
+            Lifecycle = 'Future'
+            CreationPolicy = 'Deferred'
+            Purpose = 'Application services and API'
+        }
+        [pscustomobject]@{
+            Id = 'Shared'
+            RelativePath = 'platform/shared'
+            Requirement = 'Planned'
+            Lifecycle = 'Future'
+            CreationPolicy = 'Deferred'
+            Purpose = 'Shared platform contracts and resources'
+        }
+        [pscustomobject]@{
+            Id = 'DataSchemas'
+            RelativePath = 'data/schemas'
+            Requirement = 'Planned'
+            Lifecycle = 'Future'
+            CreationPolicy = 'Deferred'
+            Purpose = 'Data and configuration schemas'
+        }
+        [pscustomobject]@{
+            Id = 'DataSeeds'
+            RelativePath = 'data/seeds'
+            Requirement = 'Planned'
+            Lifecycle = 'Future'
+            CreationPolicy = 'Deferred'
+            Purpose = 'Initial and reference data'
+        }
+        [pscustomobject]@{
+            Id = 'Documentation'
+            RelativePath = 'documentation'
+            Requirement = 'Planned'
+            Lifecycle = 'Future'
+            CreationPolicy = 'Deferred'
+            Purpose = 'Technical and product documentation'
+        }
+        [pscustomobject]@{
+            Id = 'Build'
+            RelativePath = 'build'
+            Requirement = 'Planned'
+            Lifecycle = 'Future'
+            CreationPolicy = 'Deferred'
+            Purpose = 'Generated build and validation artifacts'
+        }
+    )
+
+    foreach ($definition in $structureDefinitions) {
+        $fullPath = Join-Path $paths.ProjectRoot $definition.RelativePath
+
+        [pscustomobject]@{
+            Id = $definition.Id
+            RelativePath = $definition.RelativePath
+            FullPath = [System.IO.Path]::GetFullPath($fullPath)
+            Requirement = $definition.Requirement
+            Lifecycle = $definition.Lifecycle
+            CreationPolicy = $definition.CreationPolicy
+            Purpose = $definition.Purpose
+        }
+    }
+}
 
 function Get-ZprintProjectRoot {
     if (-not [string]::IsNullOrWhiteSpace($PSScriptRoot)) {
@@ -164,7 +335,8 @@ function Get-ZprintProjectRoot {
 
 function Initialize-ZprintRuntimePaths {
     $script:ZprintProjectRoot = Get-ZprintProjectRoot
-    $script:ZprintLogPath = Join-Path $script:ZprintProjectRoot 'logs/zprint.log'
+    $script:ZprintPaths = Get-ZprintProjectPaths -ProjectRoot $script:ZprintProjectRoot
+    $script:ZprintLogPath = $script:ZprintPaths.LogFile
 }
 
 # ==============================================================================
@@ -213,7 +385,7 @@ DIGITAL DESIGN & PRODUCTION PLATFORM
 DESIGN. VISUALIZE. PRODUCE.
 
 SINGLE-FILE PLATFORM GENERATOR
-Version 0.1.0 | Milestone 02 — Runtime Foundation
+Version 0.1.0 | Milestone 03 — Project Architecture & State Management
 
 USAGE
   ./zprint.ps1 -Help
