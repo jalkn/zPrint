@@ -1,0 +1,10 @@
+{
+  "project": {
+    "name": "ZPRINT",
+    "product": "ZPRINT STUDIO",
+    "description": "Digital Design & Production Platform",
+    "version": "0.1.0",
+    "milestone": "Project Foundation",
+    "orchestrator": "zprint.ps1"
+  }
+}
