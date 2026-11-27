@@ -26,7 +26,7 @@
 #   PowerShell 7+
 #
 #   Version:   0.1.0
-#   Milestone: 01 — Execution Foundation
+#   Milestone: 02 — Runtime Foundation
 #
 # ============================================================================== 
 
@@ -40,20 +40,16 @@
     ARCHITECTURE PRINCIPLES
     - One permanent PowerShell orchestrator.
     - Modular internal architecture.
-    - Progressive implementation.
-    - Idempotent operations.
+    - Progressive and idempotent implementation.
     - Explicit file protection and overwrite policies.
-    - Centralized validation and error handling.
-    - Controlled platform generation.
+    - Centralized validation, diagnostics, and error handling.
+    - Git operations remain external to this script.
 
-    PLATFORM RESPONSIBILITIES
-    - Brand and Design System.
-    - Product Catalog and Pricing.
-    - Studio and Customer Portal.
-    - Backend and Database.
-    - AI Agent Integration.
-    - Production and Operations.
-    - Documentation and Diagnostics.
+    RUNTIME FOUNDATION
+    - Centralized exit codes and output.
+    - PowerShell and operating-system detection.
+    - Project-root resolution independent of the caller's directory.
+    - Append-only diagnostic logging when required.
 
 .PARAMETER Help
     Display the command help information.
@@ -67,12 +63,12 @@
     Positioning:   DIGITAL DESIGN & PRODUCTION PLATFORM
     Orchestrator:  zprint.ps1
     Version:       0.1.0
-    Milestone:     Execution Foundation
+    Milestone:     Runtime Foundation
 #>
 
 # ==============================================================================
 # 02. PARAMETER DECLARATION
-# ============================================================================== 
+# ==============================================================================
 
 param(
     [switch]$Help,
@@ -83,15 +79,132 @@ param(
 )
 
 # ==============================================================================
-# 03. PROJECT METADATA
-# ============================================================================== 
+# 03. PROJECT METADATA AND RUNTIME CONSTANTS
+# ==============================================================================
 
 $script:ZprintVersion = '0.1.0'
-$script:ZprintMilestone = '01 — Execution Foundation'
+$script:ZprintMilestone = '02 — Runtime Foundation'
+
+$script:ZprintExitCodes = @{
+    Success          = 0
+    GeneralError     = 1
+    InvalidArguments = 2
+    EnvironmentError = 3
+}
+
+$script:ZprintProjectRoot = $null
+$script:ZprintLogPath = $null
 
 # ==============================================================================
-# 04. COMMAND HANDLERS
-# ============================================================================== 
+# 04. OUTPUT MANAGEMENT
+# ==============================================================================
+
+function Write-ZprintInfo {
+    param([Parameter(Mandatory)][string]$Message)
+
+    Write-Host "INFO: $Message" -ForegroundColor Cyan
+}
+
+function Write-ZprintWarning {
+    param([Parameter(Mandatory)][string]$Message)
+
+    Write-Host "WARNING: $Message" -ForegroundColor Yellow
+}
+
+function Write-ZprintError {
+    param([Parameter(Mandatory)][string]$Message)
+
+    Write-Host "ERROR: $Message" -ForegroundColor Red
+}
+
+# ==============================================================================
+# 05. ENVIRONMENT DETECTION
+# ==============================================================================
+
+function Get-ZprintRuntimeEnvironment {
+    $operatingSystem = if ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+        [System.Runtime.InteropServices.OSPlatform]::Windows
+    )) {
+        'Windows'
+    }
+    elseif ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+        [System.Runtime.InteropServices.OSPlatform]::OSX
+    )) {
+        'macOS'
+    }
+    elseif ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+        [System.Runtime.InteropServices.OSPlatform]::Linux
+    )) {
+        'Linux'
+    }
+    else {
+        'Unknown'
+    }
+
+    [pscustomobject]@{
+        PowerShellVersion = $PSVersionTable.PSVersion.ToString()
+        Edition           = $PSVersionTable.PSEdition
+        OperatingSystem   = $operatingSystem
+        Platform          = [System.Runtime.InteropServices.RuntimeInformation]::OSDescription
+        ProcessArchitecture = [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString()
+    }
+}
+
+# ==============================================================================
+# 06. PROJECT ROOT AND PATH MANAGEMENT
+# ==============================================================================
+
+function Get-ZprintProjectRoot {
+    if (-not [string]::IsNullOrWhiteSpace($PSScriptRoot)) {
+        return [System.IO.Path]::GetFullPath($PSScriptRoot)
+    }
+
+    return [System.IO.Path]::GetFullPath((Get-Location).Path)
+}
+
+function Initialize-ZprintRuntimePaths {
+    $script:ZprintProjectRoot = Get-ZprintProjectRoot
+    $script:ZprintLogPath = Join-Path $script:ZprintProjectRoot 'logs/zprint.log'
+}
+
+# ==============================================================================
+# 07. LOGGING FOUNDATION
+# ==============================================================================
+
+function Write-ZprintLog {
+    param(
+        [Parameter(Mandatory)]
+        [ValidateSet('INFO', 'WARNING', 'ERROR')]
+        [string]$Level,
+
+        [Parameter(Mandatory)]
+        [string]$Message
+    )
+
+    if ([string]::IsNullOrWhiteSpace($script:ZprintLogPath)) {
+        Initialize-ZprintRuntimePaths
+    }
+
+    $logDirectory = Split-Path -Parent $script:ZprintLogPath
+
+    if (-not (Test-Path -LiteralPath $logDirectory -PathType Container)) {
+        New-Item -ItemType Directory -Path $logDirectory -Force -ErrorAction Stop |
+            Out-Null
+    }
+
+    $timestamp = Get-Date -Format 'yyyy-MM-ddTHH:mm:ss.fffK'
+    $entry = '{0} [{1}] {2}{3}' -f $timestamp, $Level, $Message, [Environment]::NewLine
+
+    [System.IO.File]::AppendAllText(
+        $script:ZprintLogPath,
+        $entry,
+        [System.Text.UTF8Encoding]::new($false)
+    )
+}
+
+# ==============================================================================
+# 08. COMMAND HANDLERS
+# ==============================================================================
 
 function Show-ZprintHelp {
     $helpText = @'
@@ -100,7 +213,7 @@ DIGITAL DESIGN & PRODUCTION PLATFORM
 DESIGN. VISUALIZE. PRODUCE.
 
 SINGLE-FILE PLATFORM GENERATOR
-Version 0.1.0 | Milestone 01 — Execution Foundation
+Version 0.1.0 | Milestone 02 — Runtime Foundation
 
 USAGE
   ./zprint.ps1 -Help
@@ -119,14 +232,18 @@ Additional commands will be introduced in subsequent milestones.
 }
 
 function Show-ZprintVersion {
-    Write-Host 'ZPRINT STUDIO'
+    Write-ZprintInfo 'ZPRINT STUDIO'
     Write-Host "Version:   $script:ZprintVersion"
     Write-Host "Milestone: $script:ZprintMilestone"
+
+    $environment = Get-ZprintRuntimeEnvironment
+    Write-Host "PowerShell: $($environment.PowerShellVersion) ($($environment.Edition))"
+    Write-Host "OS:         $($environment.OperatingSystem)"
 }
 
 # ==============================================================================
-# 05. COMMAND VALIDATION
-# ============================================================================== 
+# 09. COMMAND VALIDATION
+# ==============================================================================
 
 function Get-ZprintCommandState {
     param(
@@ -146,11 +263,19 @@ function Get-ZprintCommandState {
         }
     )
 
-    if ($UnexpectedArguments.Count -gt 0) {
+    # PowerShell may pass an empty placeholder when no remaining
+    # positional arguments were supplied. Ignore null and whitespace values.
+    $effectiveUnexpectedArguments = @(
+        $UnexpectedArguments | Where-Object {
+            -not [string]::IsNullOrWhiteSpace($_)
+        }
+    )
+
+    if ($effectiveUnexpectedArguments.Count -gt 0) {
         return [pscustomobject]@{
             IsValid      = $false
             Command      = $null
-            ErrorMessage = "Unexpected positional argument(s): $($UnexpectedArguments -join ', ')"
+            ErrorMessage = "Unexpected positional argument(s): $($effectiveUnexpectedArguments -join ', ')"
         }
     }
 
@@ -178,26 +303,52 @@ function Get-ZprintCommandState {
 }
 
 # ==============================================================================
-# 06. MAIN EXECUTION
-# ============================================================================== 
+# 10. MAIN EXECUTION AND ERROR HANDLING
+# ==============================================================================
 
-$commandState = Get-ZprintCommandState `
-    -BoundParameters $PSBoundParameters `
-    -UnexpectedArguments $RemainingArguments
+try {
+    $commandState = Get-ZprintCommandState `
+        -BoundParameters $PSBoundParameters `
+        -UnexpectedArguments $RemainingArguments
 
-if (-not $commandState.IsValid) {
-    Write-Host "ERROR: $($commandState.ErrorMessage)" -ForegroundColor Red
-    exit 2
+    if (-not $commandState.IsValid) {
+        Write-ZprintError $commandState.ErrorMessage
+
+        try {
+            Initialize-ZprintRuntimePaths
+            Write-ZprintLog -Level 'ERROR' -Message $commandState.ErrorMessage
+        }
+        catch {
+            Write-ZprintWarning "Could not write the diagnostic log: $($_.Exception.Message)"
+        }
+
+        exit $script:ZprintExitCodes.InvalidArguments
+    }
+
+    switch ($commandState.Command) {
+        'Help' {
+            Show-ZprintHelp
+            exit $script:ZprintExitCodes.Success
+        }
+
+        'Version' {
+            Initialize-ZprintRuntimePaths
+            Show-ZprintVersion
+            exit $script:ZprintExitCodes.Success
+        }
+    }
 }
+catch {
+    $errorMessage = $_.Exception.Message
+    Write-ZprintError $errorMessage
 
-switch ($commandState.Command) {
-    'Help' {
-        Show-ZprintHelp
-        exit 0
+    try {
+        Initialize-ZprintRuntimePaths
+        Write-ZprintLog -Level 'ERROR' -Message $errorMessage
+    }
+    catch {
+        Write-ZprintWarning "Could not write the diagnostic log: $($_.Exception.Message)"
     }
 
-    'Version' {
-        Show-ZprintVersion
-        exit 0
-    }
+    exit $script:ZprintExitCodes.GeneralError
 }
