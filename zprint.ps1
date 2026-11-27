@@ -3,20 +3,48 @@
 
 <#
 .SYNOPSIS
-    ZPRINT STUDIO project orchestrator.
+    ZPRINT STUDIO single-file platform orchestrator.
 
 .DESCRIPTION
-    Provides project metadata, command-line operations,
-    environment diagnostics, and safe project initialization.
+    ZPRINT STUDIO is a DIGITAL DESIGN & PRODUCTION PLATFORM.
+
+    This script is the central control point for generating,
+    updating, validating, and maintaining the entire ZPRINT platform.
+
+    ARCHITECTURE PRINCIPLES
+    - Single permanent PowerShell orchestrator.
+    - All project logic remains inside this file.
+    - Internally modular architecture with defined responsibilities.
+    - Generated files and assets may be organized into separate directories.
+    - Existing user data and configuration must be preserved.
+    - Operations must be idempotent.
+    - Every operation must support validation and logging.
+
+    PLATFORM RESPONSIBILITIES
+    - Project Core and Configuration.
+    - Platform and File Generation.
+    - Brand Management.
+    - Product Catalog Management.
+    - Application Generation.
+    - AI Agent Integration.
+    - Documentation Generation.
+    - Validation and Diagnostics.
+    - Logging and Command Routing.
+
+    DEVELOPMENT PRINCIPLES
+    - Extend this permanent file; never create versioned orchestrators.
+    - Implement capabilities progressively.
+    - Validate each implementation before advancing.
+    - Avoid unnecessary external dependencies.
+    - Never overwrite existing user data silently.
 
 .NOTES
     Project:       ZPRINT STUDIO
+    Positioning:   DIGITAL DESIGN & PRODUCTION PLATFORM
     Version:       0.1.0
-    Milestone:     Project Initialization
+    Milestone:     Project Architecture
     Orchestrator:  zprint.ps1
-
-    This is the permanent project orchestrator.
-    All future development must extend this file.
+    Architecture: Single-File Platform Generator
 #>
 
 [CmdletBinding(DefaultParameterSetName = 'Help')]
